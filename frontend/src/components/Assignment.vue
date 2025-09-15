@@ -42,10 +42,10 @@
 						>
 							{{ submissionResource.doc?.status }}
 						</Badge>
-						<Button variant="solid" :loading="loading" @click="startMachine">
+						<Button variant="solid" :loading="loading" @click="CreateVM">
 							{{ loading ? "Запуск..." : "Start Machine" }}
 						</Button>
-						<Button variant="solid" @click="saveMachine()">
+						<Button variant="solid" @click="CheckTask">
 							{{ __('Check') }}
 						</Button>
 					</div>
@@ -233,57 +233,121 @@ const error = ref(null)
 
 const API_URL = import.meta.env.VITE_API_URL
 
-const startMachine = async () => {
+const BASE_URL = "http://10.160.160.204:8000"
+const TOKEN_URL = "http://10.160.160.201/realms/master/protocol/openid-connect/token"
+
+const getToken = async () => {
+  try {
+    const res = await fetch(TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "client_credentials",
+        client_id: "frappe",
+        client_secret: "1dIjV9BtfhuDFGNbnT4ehZcpLLSIoztG"
+      })
+    })
+    if (!res.ok) throw new Error("Ошибка получения токена: " + res.status)
+    const data = await res.json()
+    return data.access_token
+  } catch (err) {
+    error.value = err.message
+    return null
+  }
+}
+
+const CreateVM = async (taskId = "1") => {
   loading.value = true
   error.value = null
   try {
-    const res = await fetch(`${API_URL}/vms/`, {
+    const token = await getToken()
+    if (!token) throw new Error("Не удалось получить токен")
+
+    const res = await fetch(`${BASE_URL}/vms/`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": "Bearer valid_token"
+        "Authorization": `Bearer ${token}`
       },
-      body: JSON.stringify({
-        task_id: assignment.data?.title || ""
-      })
+      body: JSON.stringify({ task_id: taskId })
     })
+
     if (!res.ok) throw new Error("Ошибка запроса: " + res.status)
     const data = await res.json()
-    if (!data.ttyd_url) {
-      throw new Error("Сервер не вернул ttyd_url")
-    }
 
     if (data.vm_id) {
       sessionStorage.setItem("vm_id", data.vm_id)
     }
-
-    iframeSrc.value = data.ttyd_url
-    console.log(data.ttyd_url)
+    if (data.ttyd_url) {
+      iframeSrc.value = data.ttyd_url
+      console.log("VM ttyd_url:", data.ttyd_url)
+    }
+    return data
   } catch (err) {
-    error.value = err.message || "Ошибка при запуске машины"
+    error.value = err.message
   } finally {
     loading.value = false
   }
 }
 
-const saveMachine = async () => {
-	const vmId = sessionStorage.getItem("vm_id")
-	if (!vmId) {
-		error.value = "Нет сохранённого vm_id"
-		return
-	}
+const GetVM = async (vmId) => {
+  try {
+    const token = await getToken()
+    if (!token) throw new Error("Не удалось получить токен")
 
-	try {
-		const res = await fetch("http://127.0.0.1:8080/vms/", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ vm_id: vmId })
-		})
-		if (!res.ok) throw new Error("Ошибка при сохранении: " + res.status)
-		alert("Сохранено успешно")
-	} catch (err) {
-		error.value = err.message
-	}
+    const res = await fetch(`${BASE_URL}/vms/${vmId}/`, {
+      headers: { "Authorization": `Bearer ${token}` }
+    })
+    if (!res.ok) throw new Error("Ошибка запроса: " + res.status)
+    return await res.json()
+  } catch (err) {
+    error.value = err.message
+    return null
+  }
+}
+
+const CheckTask = async () => {
+  const vmId = sessionStorage.getItem("vm_id")
+  if (!vmId) {
+    error.value = "Нет сохранённого vm_id"
+    return
+  }
+
+  try {
+    const token = await getToken()
+    if (!token) throw new Error("Не удалось получить токен")
+
+    const res = await fetch(`${BASE_URL}/vms/check_task/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      body: JSON.stringify({ vm_id: vmId })
+    })
+    if (!res.ok) throw new Error("Ошибка при проверке: " + res.status)
+    return await res.json()
+  } catch (err) {
+    error.value = err.message
+    return null
+  }
+}
+
+const DeleteVM = async (vmId) => {
+  try {
+    const token = await getToken()
+    if (!token) throw new Error("Не удалось получить токен")
+
+    const res = await fetch(`${BASE_URL}/vms/${vmId}/`, {
+      method: "DELETE",
+      headers: { "Authorization": `Bearer ${token}` }
+    })
+    if (!res.ok) throw new Error("Ошибка удаления: " + res.status)
+    return await res.json()
+  } catch (err) {
+    error.value = err.message
+    return null
+  }
 }
 onMounted(() => {
 	window.addEventListener('keydown', keyboardShortcut)
