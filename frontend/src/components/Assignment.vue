@@ -111,7 +111,17 @@
 						</div>
 					</div>
 				</div>
-				<div v-else-if="assignment.data.type == 'URL'">
+				<div v-else-if="assignment.data.type == 'LinuxTerminal'">
+					<div class="text-xs text-ink-gray-5 mb-1">
+						{{ __('Enter a URL') }}
+					</div>
+					<FormControl
+						v-model="answer"
+						type="text"
+						:readonly="!canModifyAssignment"
+					/>
+				</div>
+				<div v-else-if="assignment.data.type == 'LinuxTerminal'">
 					<div v-if="!iframeSrc">
 						<p>Для выполнения задания необходимо нажать на кнопку "Start Machine".</p>
 						<p v-if="error" class="text-red-500 mt-2">{{ error }}</p>
@@ -256,12 +266,15 @@ const getToken = async () => {
   }
 }
 
-const CreateVM = async (taskId = "1") => {
+const CreateVM = async () => {
   loading.value = true
   error.value = null
   try {
     const token = await getToken()
     if (!token) throw new Error("Не удалось получить токен")
+
+    // тут берём title из assignment
+    const taskId = assignment.data?.title || "default_task"
 
     const res = await fetch(`${BASE_URL}/vms/`, {
       method: "POST",

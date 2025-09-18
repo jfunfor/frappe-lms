@@ -149,6 +149,7 @@ const assignmentOptions = computed(() => {
 		{ label: 'Document', value: 'Document' },
 		{ label: 'Text', value: 'Text' },
 		{ label: 'URL', value: 'URL' },
+		{ label: 'LinuxTerminal', value: 'LinuxTerminal' },
 	]
 })
 </script>
