@@ -131,10 +131,10 @@
 
 					<!-- Когда машина запущена -->
 					<div v-else-if="iframeSrc && !taskResult" class="flex items-center space-x-2">
-					<a href="iframeSrc.value" target="_blank">
+					<a v-if="iframeSrc" :href="iframeSrc" target="_blank">
 						<Button variant="solid">Открыть машину</Button>
 					</a>
-					<a href="iframeSrc.value">Ссылка на машину</a>
+					<a :href="iframeSrc.value">Ссылка на машину</a>
 					</div>
 
 					<!-- Результат проверки -->
@@ -280,16 +280,20 @@ const getToken = async () => {
   }
 }
 
+const CR = async() => {
+	iframeSrc.value = "http://localhost:7681/"
+}
+
 const CreateVM = async () => {
   loading.value = true
   error.value = null
   try {
     const token = await getToken()
     if (!token) throw new Error("Не удалось получить токен")
-
+	console.log("token done")
     // тут берём title из assignment
     const taskId = assignment.data?.title || "default_task"
-
+	console.log("task_id done")
     const res = await fetch(`${BASE_URL}/vms/`, {
       method: "POST",
       headers: {
@@ -298,19 +302,23 @@ const CreateVM = async () => {
       },
       body: JSON.stringify({ task_id: taskId })
     })
-
-    if (res.status === 400) {
-        throw new Error("Создано слишком много машин. Новую запускать нельзя.")
-      } else {
-        throw new Error(`Ошибка при создании машины: ${res.status}`)
-      }
+	console.log("request done")
+    if (!res.ok) {
+		if (res.status === 400) {
+			throw new Error("Создано слишком много машин. Новую запускать нельзя.")
+		} else {
+			throw new Error(`Ошибка при создании машины: ${res.status}`)
+		}
+	}
     const data = await res.json()
+    console.log(data)
 
     if (data.vm_id) {
       sessionStorage.setItem("vm_id", data.vm_id)
     }
     if (data.ttyd_url && data.ttyd_user && data.ttyd_password) {
 	try {
+		console.log("catch done")
 		const url = new URL(data.ttyd_url)
 		iframeSrc.value = `${url.protocol}//${data.ttyd_user}:${data.ttyd_password}@${url.host}${url.pathname}${url.search}`
 		console.log("VM ttyd_url with auth:", iframeSrc.value)
@@ -363,6 +371,7 @@ const CheckTaskResult = async () => {
 
     if (!res.ok) throw new Error('Ошибка при проверке: ' + res.status)
     taskResult.value = await res.json()
+    if (taskResult.value == 100) await DeleteVM(vmID)
   } catch (err) {
     error.value = err.message
   } finally {
