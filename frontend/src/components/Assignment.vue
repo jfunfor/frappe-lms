@@ -42,10 +42,7 @@
 						>
 							{{ submissionResource.doc?.status }}
 						</Badge>
-						<Button variant="solid" :loading="loading" @click="CreateVM">
-							{{ loading ? "Запуск..." : "Start Machine" }}
-						</Button>
-						<Button variant="solid" @click="CheckTask">
+						<Button variant="solid" @click="CheckTaskResult">
 							{{ __('Check') }}
 						</Button>
 					</div>
@@ -111,7 +108,7 @@
 						</div>
 					</div>
 				</div>
-				<div v-else-if="assignment.data.type == 'LinuxTerminal'">
+				<div v-else-if="assignment.data.type == 'URL'">
 					<div class="text-xs text-ink-gray-5 mb-1">
 						{{ __('Enter a URL') }}
 					</div>
@@ -121,19 +118,33 @@
 						:readonly="!canModifyAssignment"
 					/>
 				</div>
-				<div v-else-if="assignment.data.type == 'LinuxTerminal'">
-					<div v-if="!iframeSrc">
-						<p>Для выполнения задания необходимо нажать на кнопку "Start Machine".</p>
-						<p v-if="error" class="text-red-500 mt-2">{{ error }}</p>
+				<div v-else-if="assignment.data.type === 'LinuxTerminal'">
+					<!-- Пока машина не создана -->
+					<div v-if="!iframeSrc && !taskResult" class="flex items-center space-x-2">
+					<p>Для выполнения задания необходимо нажать на кнопку "Start Machine".</p>
+
+					<Button variant="solid" :loading="loading" @click="CreateVM">
+						{{ loading ? "Запуск..." : "Start Machine" }}
+					</Button>
 					</div>
-					<iframe
-						v-else
-						:src="iframeSrc"
-						width="100%"
-						height="600"
-						frameborder="0"
-						allowfullscreen
-					></iframe>
+
+					<!-- Когда машина запущена -->
+					<div v-else-if="iframeSrc && !taskResult" class="flex items-center space-x-2">
+					<a href="iframeSrc.value" target="_blank">
+						<Button variant="solid">Открыть машину</Button>
+					</a>
+					<a href="iframeSrc.value">Ссылка на машину</a>
+					</div>
+
+					<!-- Результат проверки -->
+					<div v-else-if="taskResult" class="flex items-center space-x-2">
+					<p>Результат проверки задания:</p>
+					<p>Оценка: {{ taskResult.grade }}%</p>
+					<ul>
+						<li v-for="fb in taskResult.feedback" :key="fb">{{ fb }}</li>
+					</ul>
+					<Button variant="solid" @click="taskResult = null">Скрыть результат</Button>
+					</div>
 				</div>
 				<div v-else>
 					<div class="text-sm mb-2 text-ink-gray-7">
@@ -237,8 +248,10 @@ const props = defineProps({
 	},
 })
 
-const iframeSrc = ref("")
+const iframeSrc = ref(null)
 const loading = ref(false)
+const taskResult = ref(null)
+const checking = ref(false)
 const error = ref(null)
 
 const API_URL = import.meta.env.VITE_API_URL
@@ -285,16 +298,25 @@ const CreateVM = async () => {
       body: JSON.stringify({ task_id: taskId })
     })
 
-    if (!res.ok) throw new Error("Ошибка запроса: " + res.status)
+    if (res.status === 400) {
+        throw new Error("Создано слишком много машин. Новую запускать нельзя.")
+      } else {
+        throw new Error(`Ошибка при создании машины: ${res.status}`)
+      }
     const data = await res.json()
 
     if (data.vm_id) {
       sessionStorage.setItem("vm_id", data.vm_id)
     }
-    if (data.ttyd_url) {
-      iframeSrc.value = data.ttyd_url
-      console.log("VM ttyd_url:", data.ttyd_url)
-    }
+    if (data.ttyd_url && data.ttyd_user && data.ttyd_password) {
+	try {
+		const url = new URL(data.ttyd_url)
+		iframeSrc.value = `${url.protocol}//${data.ttyd_user}:${data.ttyd_password}@${url.host}${url.pathname}${url.search}`
+		console.log("VM ttyd_url with auth:", iframeSrc.value)
+	} catch (e) {
+		console.error("Ошибка при разборе ttyd_url:", e)
+	}
+	}
     return data
   } catch (err) {
     error.value = err.message
@@ -319,30 +341,31 @@ const GetVM = async (vmId) => {
   }
 }
 
-const CheckTask = async () => {
-  const vmId = sessionStorage.getItem("vm_id")
-  if (!vmId) {
-    error.value = "Нет сохранённого vm_id"
-    return
-  }
-
+const CheckTaskResult = async () => {
+  checking.value = true
+  error.value = null
   try {
+    const vmId = sessionStorage.getItem('vm_id')
+    if (!vmId) throw new Error('Нет сохранённого vm_id')
+
     const token = await getToken()
-    if (!token) throw new Error("Не удалось получить токен")
+    if (!token) throw new Error('Не удалось получить токен')
 
     const res = await fetch(`${BASE_URL}/vms/check_task/`, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify({ vm_id: vmId })
     })
-    if (!res.ok) throw new Error("Ошибка при проверке: " + res.status)
-    return await res.json()
+
+    if (!res.ok) throw new Error('Ошибка при проверке: ' + res.status)
+    taskResult.value = await res.json()
   } catch (err) {
     error.value = err.message
-    return null
+  } finally {
+    checking.value = false
   }
 }
 
