@@ -119,6 +119,7 @@
 					/>
 				</div>
 				<div v-else-if="assignment.data.type === 'LinuxTerminal'">
+
 					<!-- Пока машина не создана -->
 					<div v-if="!iframeSrc && !taskResult" class="flex items-center space-x-2">
 					<p>Для выполнения задания необходимо нажать на кнопку "Start Machine".</p>
