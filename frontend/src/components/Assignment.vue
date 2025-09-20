@@ -371,7 +371,10 @@ const CheckTaskResult = async () => {
 
     if (!res.ok) throw new Error('Ошибка при проверке: ' + res.status)
     taskResult.value = await res.json()
-    if (taskResult.value == 100) await DeleteVM(vmID)
+    if (taskResult.value == 100) {
+    console.log("value 100")
+    await DeleteVM(vmID)
+    }
   } catch (err) {
     error.value = err.message
   } finally {
@@ -382,13 +385,16 @@ const CheckTaskResult = async () => {
 const DeleteVM = async (vmId) => {
   try {
     const token = await getToken()
+    console.log("token done for delete")
     if (!token) throw new Error("Не удалось получить токен")
 
     const res = await fetch(`${BASE_URL}/vms/${vmId}/`, {
       method: "DELETE",
       headers: { "Authorization": `Bearer ${token}` }
     })
+    console.log("delete done")
     if (!res.ok) throw new Error("Ошибка удаления: " + res.status)
+
     return await res.json()
   } catch (err) {
     error.value = err.message
