@@ -42,8 +42,8 @@
 						>
 							{{ submissionResource.doc?.status }}
 						</Badge>
-						<Button variant="solid" @click="CheckTaskResult">
-							{{ __('Check') }}
+						<Button variant="solid" :disabled="!iframeSrc && !taskResult || checking" @click="CheckTaskResult">
+							{{ checking ? "Запуск..." : "Check" }}
 						</Button>
 					</div>
 				</div>
@@ -108,7 +108,7 @@
 						</div>
 					</div>
 				</div>
-				<div v-else-if="assignment.data.type == 'URL'">
+				<div v-else-if="assignment.data.type === 'URL'">
 					<div class="text-xs text-ink-gray-5 mb-1">
 						{{ __('Enter a URL') }}
 					</div>
@@ -134,7 +134,6 @@
 					<a v-if="iframeSrc" :href="iframeSrc" target="_blank">
 						<Button variant="solid">Открыть машину</Button>
 					</a>
-					<a :href="iframeSrc.value">Ссылка на машину</a>
 					</div>
 
 					<!-- Результат проверки -->
@@ -144,7 +143,9 @@
 					<ul>
 						<li v-for="fb in taskResult.feedback" :key="fb">{{ fb }}</li>
 					</ul>
-					<Button variant="solid" @click="taskResult = null">Скрыть результат</Button>
+						<a v-if="iframeSrc" :href="iframeSrc" target="_blank">
+							<Button variant="solid">Открыть машину</Button>
+						</a>
 					</div>
 				</div>
 				<div v-else>
@@ -371,8 +372,12 @@ const CheckTaskResult = async () => {
 
     if (!res.ok) throw new Error('Ошибка при проверке: ' + res.status)
     taskResult.value = await res.json()
-    if (taskResult.value == 100) {
+		console.log(taskResult.value)
+		console.log(taskResult.value.grade)
+    if (taskResult.value.grade === 100) {
     console.log("value 100")
+    answer.value = taskResult.value.grade;
+    await submitAssignment()
     await DeleteVM(vmID)
     }
   } catch (err) {
